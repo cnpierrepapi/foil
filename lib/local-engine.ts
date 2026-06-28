@@ -114,12 +114,12 @@ export async function runLocalCoach(
     ...buildMessages(source, sourceType, history, latest),
   ];
 
-  // Stream so the UI can show that the model is actively generating.
-  // response_format json_object constrains decoding to valid JSON, which a small
-  // 0.5B model needs (it won't reliably emit JSON from the prompt alone).
+  // Stream so the UI can show that the model is actively generating. We do NOT
+  // use response_format json_object: on a weak GPU the grammar step stalls in
+  // prefill (no tokens, uninterruptible). The prompt asks for JSON and the
+  // tolerant parser recovers it (or salvages prose), so plain decoding is best.
   const stream = (await engine.chat.completions.create({
     messages,
-    response_format: { type: "json_object" },
     temperature: 0.6,
     max_tokens: 400,
     stream: true,

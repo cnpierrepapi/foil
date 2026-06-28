@@ -46,8 +46,8 @@ Rules:
 - Reply with ONE probing question (at most two) that pushes their thinking one concrete step further, building on what they just said. 2 to 4 sentences, end on a question. Warm and brief. Treat them as a capable peer.
 - Then score ONLY their latest message from 0 to 5 on: curiosity (deeper vs surface), specificity (precise vs vague), assumptions (examining premises vs taking them for granted), evidence (seeking proof, mechanism, or counter-examples vs asserting).
 
-Output ONLY this JSON and nothing else:
-{"coachReply":"...","refusedToAnswer":false,"scores":{"curiosity":0,"specificity":0,"assumptions":0,"evidence":0},"observation":"one honest sentence about their move","nextNudge":"one sharper question they could ask next"}`;
+Reply with ONLY the JSON object below. Start your reply with the character { and end with }. No greeting, no preamble, no text outside the JSON.
+{"coachReply":"a 2-4 sentence Socratic reply ending in a question","refusedToAnswer":false,"scores":{"curiosity":0,"specificity":0,"assumptions":0,"evidence":0},"observation":"one honest sentence about their move","nextNudge":"one sharper question they could ask next"}`;
 
 export const COACH_SCHEMA = {
   type: "object",
