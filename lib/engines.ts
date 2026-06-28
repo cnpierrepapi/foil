@@ -7,8 +7,10 @@ export interface EngineDef {
   id: EngineId;
   kind: "local" | "cloud";
   label: string;
-  // WebLLM prebuilt model id (local engines only)
+  // WebLLM prebuilt model ids (local engines only). The f16 build is smaller and
+  // faster but needs the WebGPU shader-f16 feature; f32 runs on any WebGPU device.
   model?: string;
+  modelF32?: string;
   size: string;
   blurb: string;
 }
@@ -19,6 +21,7 @@ export const ENGINES: EngineDef[] = [
     kind: "local",
     label: "On-device · Qwen2.5 1.5B",
     model: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+    modelF32: "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
     size: "~1.1 GB, one-time",
     blurb: "Runs entirely in your browser. Private and offline after the first load.",
   },
@@ -27,6 +30,7 @@ export const ENGINES: EngineDef[] = [
     kind: "local",
     label: "On-device · Qwen2.5 7B",
     model: "Qwen2.5-7B-Instruct-q4f16_1-MLC",
+    modelF32: "Qwen2.5-7B-Instruct-q4f32_1-MLC",
     size: "~4.7 GB, one-time",
     blurb: "Sharper coaching for capable machines. Still fully on-device.",
   },

@@ -1,7 +1,7 @@
 "use client";
 
 import { getEngine, type EngineId } from "./engines";
-import { runLocalCoach, type LoadProgress } from "./local-engine";
+import { runLocalCoach, supportsShaderF16, type LoadProgress } from "./local-engine";
 import type { CoachResponse, Session, Turn } from "./types";
 
 // Single entry point the UI calls. It hides whether the coach is running
@@ -21,14 +21,24 @@ export async function askCoach(
   const history = historyFrom(session.turns);
 
   if (engine.kind === "local" && engine.model) {
-    return runLocalCoach(
-      engine.model,
-      session.source,
-      session.sourceType,
-      history,
-      latest,
-      onProgress,
-    );
+    // Pick a build the device can actually run: f16 when supported, else f32.
+    const f16 = await supportsShaderF16();
+    const model = f16 ? engine.model : engine.modelF32 ?? engine.model;
+    try {
+      return await runLocalCoach(
+        model,
+        session.source,
+        session.sourceType,
+        history,
+        latest,
+        onProgress,
+      );
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : "unknown error";
+      throw new Error(
+        `Could not run the on-device model (${detail}). Try the Cloud engine from the menu at the top right.`,
+      );
+    }
   }
 
   const res = await fetch("/api/coach", {

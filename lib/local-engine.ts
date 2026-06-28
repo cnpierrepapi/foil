@@ -28,6 +28,22 @@ type Engine = {
 
 const engines = new Map<string, Engine>();
 
+// Many GPUs/browsers expose WebGPU but not the shader-f16 feature that q4f16
+// model builds require. Probe for it so we can pick a build the device can run.
+let f16Support: boolean | null = null;
+export async function supportsShaderF16(): Promise<boolean> {
+  if (f16Support !== null) return f16Support;
+  try {
+    const gpu = (navigator as unknown as { gpu?: { requestAdapter: () => Promise<{ features: Set<string> } | null> } }).gpu;
+    if (!gpu) return (f16Support = false);
+    const adapter = await gpu.requestAdapter();
+    f16Support = !!adapter && adapter.features.has("shader-f16");
+  } catch {
+    f16Support = false;
+  }
+  return f16Support;
+}
+
 export async function ensureLocalEngine(
   model: string,
   onProgress?: (p: LoadProgress) => void,
