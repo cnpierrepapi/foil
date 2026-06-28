@@ -23,6 +23,7 @@ export async function askCoach(
   session: Session,
   latest: string,
   onProgress?: (p: LoadProgress) => void,
+  onToken?: (count: number) => void,
 ): Promise<CoachResponse> {
   const engine = getEngine(engineId);
   const history = historyFrom(session.turns);
@@ -37,6 +38,7 @@ export async function askCoach(
         history,
         latest,
         onProgress,
+        onToken,
       );
     } catch (e) {
       const detail = e instanceof Error ? e.message : "unknown error";

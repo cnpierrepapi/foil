@@ -39,6 +39,7 @@ export default function ThinkPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<LoadProgress | null>(null);
+  const [genTokens, setGenTokens] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [localState, setLocalState] = useState<
     "idle" | "loading" | "ready" | "unsupported" | "error"
@@ -155,11 +156,12 @@ export default function ThinkPage() {
     setInput("");
     setError(null);
     setSession({ ...base, turns: [...base.turns, { role: "learner", text: latest }] });
+    setGenTokens(0);
     setBusy(true);
     try {
       let resp;
       try {
-        resp = await askCoach(engineId, base, latest, setProgress);
+        resp = await askCoach(engineId, base, latest, setProgress, setGenTokens);
       } catch (primaryErr) {
         // On-device couldn't run here: fall back to the cloud coach automatically.
         if (getEngine(engineId).kind === "local") {
@@ -328,8 +330,20 @@ export default function ThinkPage() {
               {busy && (
                 <div className="space-y-2 text-sm text-ink/50">
                   <p className="font-serif text-lg italic">
-                    {progress ? "Loading the on-device coach…" : "Thinking…"}
+                    {progress
+                      ? "Loading the on-device coach…"
+                      : genTokens > 0
+                        ? `Thinking on your device… (${genTokens} tokens)`
+                        : "Thinking…"}
                   </p>
+                  {busy &&
+                    !progress &&
+                    genTokens === 0 &&
+                    getEngine(engineId).kind === "local" && (
+                      <p className="text-xs text-ink/40">
+                        The first answer is slower while your device warms up.
+                      </p>
+                    )}
                   {progress && (
                     <div className="max-w-sm">
                       <div className="h-1.5 overflow-hidden rounded-full bg-ink/10">

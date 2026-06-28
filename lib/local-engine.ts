@@ -16,14 +16,16 @@ export interface LoadProgress {
 }
 
 // One engine instance per model id, reused across requests.
+type ChatChunk = {
+  choices: { delta?: { content?: string | null }; message?: { content?: string | null } }[];
+};
 type Engine = {
   chat: {
     completions: {
-      create: (args: unknown) => Promise<{
-        choices: { message: { content: string | null } }[];
-      }>;
+      create: (args: unknown) => Promise<unknown>;
     };
   };
+  interruptGenerate?: () => void;
 };
 
 // Cache the in-flight load promise (not just the resolved engine) so warming on
@@ -73,6 +75,12 @@ export function ensureLocalEngine(
   return promise;
 }
 
+// Hard ceiling so a slow or runaway generation can't hang forever. On a slow
+// integrated GPU the f32 build does a few tokens/sec, so this allows a complete
+// answer while still bounding the worst case; on timeout we interrupt and let
+// the caller fall back to the cloud coach.
+const LOCAL_TIMEOUT_MS = 240000;
+
 export async function runLocalCoach(
   model: string,
   source: string,
@@ -80,6 +88,7 @@ export async function runLocalCoach(
   history: { role: "learner" | "coach"; text: string }[],
   latest: string,
   onProgress?: (p: LoadProgress) => void,
+  onToken?: (count: number) => void,
 ): Promise<CoachResponse> {
   const engine = await ensureLocalEngine(model, onProgress);
   const messages = [
@@ -87,15 +96,42 @@ export async function runLocalCoach(
     ...buildMessages(source, sourceType, history, latest),
   ];
 
-  const completion = await engine.chat.completions.create({
+  // Stream so the UI can show that the model is actively generating.
+  const stream = (await engine.chat.completions.create({
     messages,
     response_format: { type: "json_object" },
     temperature: 0.6,
-    max_tokens: 700,
-  });
+    max_tokens: 400,
+    stream: true,
+  })) as AsyncIterable<ChatChunk>;
 
-  const text = completion.choices[0]?.message?.content ?? "";
-  return parseCoachJSON(text);
+  let content = "";
+  let count = 0;
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    engine.interruptGenerate?.();
+  }, LOCAL_TIMEOUT_MS);
+
+  try {
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta?.content ?? "";
+      if (delta) {
+        content += delta;
+        count += 1;
+        onToken?.(count);
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (timedOut) {
+    throw new Error(
+      "On-device generation timed out. This device is likely too slow for the local model.",
+    );
+  }
+  return parseCoachJSON(content);
 }
 
 export function isLocalEngineLoading(model: string): boolean {
