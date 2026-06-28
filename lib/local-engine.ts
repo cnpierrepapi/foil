@@ -2,8 +2,7 @@
 // once, then every request runs locally. Client-only: imported dynamically.
 
 import {
-  SYSTEM_PROMPT,
-  JSON_INSTRUCTION,
+  COMPACT_SYSTEM_PROMPT,
   buildMessages,
   parseCoachJSON,
   type SourceType,
@@ -92,14 +91,15 @@ export async function runLocalCoach(
 ): Promise<CoachResponse> {
   const engine = await ensureLocalEngine(model, onProgress);
   const messages = [
-    { role: "system", content: `${SYSTEM_PROMPT}\n\n${JSON_INSTRUCTION}` },
+    { role: "system", content: COMPACT_SYSTEM_PROMPT },
     ...buildMessages(source, sourceType, history, latest),
   ];
 
-  // Stream so the UI can show that the model is actively generating.
+  // Stream so the UI can show that the model is actively generating. No
+  // response_format grammar here: it slows decoding on a small model, and the
+  // tolerant parser handles plain JSON the model returns.
   const stream = (await engine.chat.completions.create({
     messages,
-    response_format: { type: "json_object" },
     temperature: 0.6,
     max_tokens: 400,
     stream: true,

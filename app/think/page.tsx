@@ -40,6 +40,7 @@ export default function ThinkPage() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<LoadProgress | null>(null);
   const [genTokens, setGenTokens] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [localState, setLocalState] = useState<
     "idle" | "loading" | "ready" | "unsupported" | "error"
@@ -65,6 +66,17 @@ export default function ThinkPage() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [session?.turns.length, busy]);
+
+  // Tick a seconds counter while a request is in flight, so the user sees the
+  // model is alive during prefill (before the first token streams).
+  useEffect(() => {
+    if (!busy) {
+      setElapsed(0);
+      return;
+    }
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
 
   // Warm the on-device model the moment the page is ready, so the first
   // question is instant and we learn up front whether we must fall back.
@@ -334,7 +346,9 @@ export default function ThinkPage() {
                       ? "Loading the on-device coach…"
                       : genTokens > 0
                         ? `Thinking on your device… (${genTokens} tokens)`
-                        : "Thinking…"}
+                        : getEngine(engineId).kind === "local"
+                          ? `Thinking on your device… ${elapsed}s`
+                          : "Thinking…"}
                   </p>
                   {busy &&
                     !progress &&
