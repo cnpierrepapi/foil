@@ -115,7 +115,13 @@ export default function ThinkPage() {
     }
   }
 
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <div className="flex min-h-full items-center justify-center bg-paper">
+        <span className="font-serif text-2xl tracking-tight text-ink/40">Foil</span>
+      </div>
+    );
+  }
 
   const engine = getEngine(engineId);
   const totals = session
