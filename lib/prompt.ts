@@ -135,20 +135,32 @@ export function parseCoachJSON(raw: string): import("./types").CoachResponse {
   const end = text.lastIndexOf("}");
   if (start !== -1 && end !== -1) text = text.slice(start, end + 1);
 
-  const obj = JSON.parse(text) as Record<string, unknown>;
-  const rawScores = (obj.scores ?? {}) as Record<string, unknown>;
   const clamp = (v: unknown) => Math.max(0, Math.min(5, Math.round(Number(v) || 0)));
-
-  return {
-    coachReply: String(obj.coachReply ?? "").trim() || "Let's keep going. What part of this feels least settled to you?",
-    refusedToAnswer: Boolean(obj.refusedToAnswer),
-    scores: {
-      curiosity: clamp(rawScores.curiosity),
-      specificity: clamp(rawScores.specificity),
-      assumptions: clamp(rawScores.assumptions),
-      evidence: clamp(rawScores.evidence),
-    },
-    observation: String(obj.observation ?? "").trim(),
-    nextNudge: String(obj.nextNudge ?? "").trim(),
-  };
+  try {
+    const obj = JSON.parse(text) as Record<string, unknown>;
+    const rawScores = (obj.scores ?? {}) as Record<string, unknown>;
+    return {
+      coachReply: String(obj.coachReply ?? "").trim() || "Let's keep going. What part of this feels least settled to you?",
+      refusedToAnswer: Boolean(obj.refusedToAnswer),
+      scores: {
+        curiosity: clamp(rawScores.curiosity),
+        specificity: clamp(rawScores.specificity),
+        assumptions: clamp(rawScores.assumptions),
+        evidence: clamp(rawScores.evidence),
+      },
+      observation: String(obj.observation ?? "").trim(),
+      nextNudge: String(obj.nextNudge ?? "").trim(),
+    };
+  } catch {
+    // The model returned prose, not JSON. Use it as the reply so the session
+    // continues instead of erroring out; scores fall back to neutral.
+    const reply = raw.replace(/```json|```/gi, "").trim();
+    return {
+      coachReply: reply.slice(0, 800) || "Let's keep going. What part of this feels least settled to you?",
+      refusedToAnswer: false,
+      scores: { curiosity: 0, specificity: 0, assumptions: 0, evidence: 0 },
+      observation: "",
+      nextNudge: "",
+    };
+  }
 }
