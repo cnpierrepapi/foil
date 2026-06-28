@@ -33,7 +33,7 @@ function total(scores: Scores) {
 
 export default function ThinkPage() {
   const [session, setSession] = useState<Session | null>(null);
-  const [engineId, setEngineId] = useState<EngineId>("local-1b");
+  const [engineId, setEngineId] = useState<EngineId>("local-0_5b");
   const [draftType, setDraftType] = useState<SourceType>("claim");
   const [draftSource, setDraftSource] = useState("");
   const [input, setInput] = useState("");
@@ -628,7 +628,7 @@ function LoadingScreen({
           </h2>
           <p className="mt-2 max-w-sm text-sm text-ink/60">
             {failed
-              ? "Copy the log below so we can debug it, or continue with the cloud coach for now."
+              ? "Downloaded pieces are saved, so “Try again” resumes where it left off — it won’t restart from zero. On a slow connection it can take a few tries. Or use the cloud coach now and let it finish later."
               : "A small model is loading into your browser. This happens once. After that it runs fully on your device, private and offline."}
           </p>
         </div>
