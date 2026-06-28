@@ -1,7 +1,7 @@
 // The engines a learner can run the coach on. Local-first: the model runs in
 // the browser over WebGPU and nothing leaves the device. Claude is the fallback.
 
-export type EngineId = "local-1_5b" | "local-7b" | "cloud";
+export type EngineId = "local-1b" | "local-1_5b" | "local-7b" | "cloud";
 
 export interface EngineDef {
   id: EngineId;
@@ -17,13 +17,22 @@ export interface EngineDef {
 
 export const ENGINES: EngineDef[] = [
   {
+    id: "local-1b",
+    kind: "local",
+    label: "On-device · Llama 3.2 1B",
+    model: "Llama-3.2-1B-Instruct-q4f16_1-MLC",
+    modelF32: "Llama-3.2-1B-Instruct-q4f32_1-MLC",
+    size: "~0.9 GB, one-time",
+    blurb: "Smallest and fastest. Runs fully in your browser, private and offline.",
+  },
+  {
     id: "local-1_5b",
     kind: "local",
-    label: "On-device · Qwen2.5 1.5B",
+    label: "On-device · Qwen2.5 1.5B (sharper)",
     model: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
     modelF32: "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
     size: "~1.1 GB, one-time",
-    blurb: "Runs entirely in your browser. Private and offline after the first load.",
+    blurb: "A bit sharper than the 1B model. Still fully on your device.",
   },
   {
     id: "local-7b",

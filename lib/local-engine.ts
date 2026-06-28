@@ -78,7 +78,7 @@ export function ensureLocalEngine(
 // integrated GPU the f32 build does a few tokens/sec, so this allows a complete
 // answer while still bounding the worst case; on timeout we interrupt and let
 // the caller fall back to the cloud coach.
-const LOCAL_TIMEOUT_MS = 240000;
+const LOCAL_TIMEOUT_MS = 90000;
 
 export async function runLocalCoach(
   model: string,

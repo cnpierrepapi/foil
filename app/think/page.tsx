@@ -33,7 +33,7 @@ function total(scores: Scores) {
 
 export default function ThinkPage() {
   const [session, setSession] = useState<Session | null>(null);
-  const [engineId, setEngineId] = useState<EngineId>("local-1_5b");
+  const [engineId, setEngineId] = useState<EngineId>("local-1b");
   const [draftType, setDraftType] = useState<SourceType>("claim");
   const [draftSource, setDraftSource] = useState("");
   const [input, setInput] = useState("");
@@ -51,6 +51,7 @@ export default function ThinkPage() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [fallback, setFallback] = useState(false);
+  const [lastLocalError, setLastLocalError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -175,9 +176,14 @@ export default function ThinkPage() {
       try {
         resp = await askCoach(engineId, base, latest, setProgress, setGenTokens);
       } catch (primaryErr) {
-        // On-device couldn't run here: fall back to the cloud coach automatically.
+        // On-device couldn't run here: capture why, then fall back to cloud.
         if (getEngine(engineId).kind === "local") {
           setFallback(true);
+          setLastLocalError(
+            primaryErr instanceof Error
+              ? primaryErr.stack || primaryErr.message
+              : String(primaryErr),
+          );
           resp = await askCoach("cloud", base, latest);
         } else {
           throw primaryErr;
@@ -266,9 +272,27 @@ export default function ThinkPage() {
       {getEngine(engineId).kind === "local" &&
         (localState === "unsupported" || fallback) && (
           <div className="border-b border-amber-300/60 bg-amber-50 px-5 py-2 text-xs text-amber-800 sm:px-8">
-            {localState === "unsupported"
-              ? "This device can’t run the on-device model (no WebGPU here), so Foil is using the cloud coach instead."
-              : "The on-device model couldn’t load here, so Foil fell back to the cloud coach for this answer."}
+            <div className="mx-auto max-w-6xl">
+              {localState === "unsupported"
+                ? "This device can’t run the on-device model (no WebGPU here), so Foil is using the cloud coach instead."
+                : "The on-device model couldn’t finish here, so Foil used the cloud coach for that answer."}
+              {fallback && lastLocalError && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer underline">why? (details)</summary>
+                  <div className="mt-1 flex items-start gap-2">
+                    <pre className="max-h-32 flex-1 overflow-auto whitespace-pre-wrap rounded border border-amber-300/60 bg-amber-100/60 p-2 font-mono text-[0.7rem] leading-relaxed">
+                      {lastLocalError}
+                    </pre>
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(lastLocalError)}
+                      className="shrink-0 rounded border border-amber-400 px-2 py-1 font-medium hover:bg-amber-100"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </details>
+              )}
+            </div>
           </div>
         )}
 
