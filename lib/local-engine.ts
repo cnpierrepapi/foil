@@ -56,11 +56,15 @@ export function ensureLocalEngine(
 
   const promise = (async () => {
     const webllm = await import("@mlc-ai/web-llm");
-    // Store weights in IndexedDB rather than the Cache API. HuggingFace serves
-    // shards via redirects, and Cache.add() rejects redirected/opaque responses
-    // with "Cache.add() encountered a network error". IndexedDB fetches manually
-    // and avoids that, working across far more browsers and networks.
-    const appConfig = { ...webllm.prebuiltAppConfig, useIndexedDBCache: true };
+    // Use the IndexedDB cache backend instead of the default Cache API.
+    // HuggingFace serves weight shards via redirects, and the Cache API rejects
+    // redirected/opaque responses with "Cache.add() encountered a network
+    // error" (and stalls retrying them). IndexedDB fetches each shard plainly
+    // and stores the bytes, which is far more reliable across browsers/networks.
+    const appConfig = {
+      ...webllm.prebuiltAppConfig,
+      cacheBackend: "indexeddb" as const,
+    };
     return (await webllm.CreateMLCEngine(model, {
       appConfig,
       initProgressCallback: (r: { text: string; progress: number }) =>
