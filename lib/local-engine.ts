@@ -9,6 +9,14 @@ import {
 } from "./prompt";
 import type { CoachResponse } from "./types";
 
+// Models whose weights we mirror to our own CDN (Vercel Blob) for a fast,
+// reliable download instead of HuggingFace. Maps the WebLLM model id to the
+// base URL of its weight files.
+const HOSTED_WEIGHTS: Record<string, string> = {
+  "Qwen2.5-0.5B-Instruct-q4f32_1-MLC":
+    "https://xzy3jzk0o1duizag.public.blob.vercel-storage.com/Qwen2.5-0.5B-Instruct-q4f32_1-MLC",
+};
+
 export interface LoadProgress {
   text: string;
   progress: number; // 0..1
@@ -65,6 +73,13 @@ export function ensureLocalEngine(
       ...webllm.prebuiltAppConfig,
       cacheBackend: "indexeddb" as const,
     };
+    // Point a mirrored model at our CDN instead of HuggingFace.
+    const hosted = HOSTED_WEIGHTS[model];
+    if (hosted) {
+      appConfig.model_list = appConfig.model_list.map((r) =>
+        r.model_id === model ? { ...r, model: hosted } : r,
+      );
+    }
     return (await webllm.CreateMLCEngine(model, {
       appConfig,
       initProgressCallback: (r: { text: string; progress: number }) =>
