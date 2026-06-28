@@ -26,7 +26,9 @@ type Engine = {
   };
 };
 
-const engines = new Map<string, Engine>();
+// Cache the in-flight load promise (not just the resolved engine) so warming on
+// page load and a first question can't start two downloads of the same model.
+const enginePromises = new Map<string, Promise<Engine>>();
 
 // Many GPUs/browsers expose WebGPU but not the shader-f16 feature that q4f16
 // model builds require. Probe for it so we can pick a build the device can run.
@@ -44,27 +46,31 @@ export async function supportsShaderF16(): Promise<boolean> {
   return f16Support;
 }
 
-export async function ensureLocalEngine(
+export function ensureLocalEngine(
   model: string,
   onProgress?: (p: LoadProgress) => void,
 ): Promise<Engine> {
-  const existing = engines.get(model);
+  const existing = enginePromises.get(model);
   if (existing) return existing;
 
-  const webllm = await import("@mlc-ai/web-llm");
-  // Store weights in IndexedDB rather than the Cache API. HuggingFace serves
-  // shards via redirects, and Cache.add() rejects redirected/opaque responses
-  // with "Cache.add() encountered a network error". IndexedDB fetches manually
-  // and avoids that, working across far more browsers and networks.
-  const appConfig = { ...webllm.prebuiltAppConfig, useIndexedDBCache: true };
-  const engine = (await webllm.CreateMLCEngine(model, {
-    appConfig,
-    initProgressCallback: (r: { text: string; progress: number }) =>
-      onProgress?.({ text: r.text, progress: r.progress }),
-  })) as unknown as Engine;
+  const promise = (async () => {
+    const webllm = await import("@mlc-ai/web-llm");
+    // Store weights in IndexedDB rather than the Cache API. HuggingFace serves
+    // shards via redirects, and Cache.add() rejects redirected/opaque responses
+    // with "Cache.add() encountered a network error". IndexedDB fetches manually
+    // and avoids that, working across far more browsers and networks.
+    const appConfig = { ...webllm.prebuiltAppConfig, useIndexedDBCache: true };
+    return (await webllm.CreateMLCEngine(model, {
+      appConfig,
+      initProgressCallback: (r: { text: string; progress: number }) =>
+        onProgress?.({ text: r.text, progress: r.progress }),
+    })) as unknown as Engine;
+  })();
 
-  engines.set(model, engine);
-  return engine;
+  enginePromises.set(model, promise);
+  // On failure, drop the cached promise so a later attempt can retry cleanly.
+  promise.catch(() => enginePromises.delete(model));
+  return promise;
 }
 
 export async function runLocalCoach(
@@ -92,6 +98,6 @@ export async function runLocalCoach(
   return parseCoachJSON(text);
 }
 
-export function isLocalEngineLoaded(model: string): boolean {
-  return engines.has(model);
+export function isLocalEngineLoading(model: string): boolean {
+  return enginePromises.has(model);
 }

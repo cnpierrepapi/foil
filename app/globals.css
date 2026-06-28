@@ -23,3 +23,22 @@ body {
 ::selection {
   background: #b4541e22;
 }
+
+@keyframes gear-cw {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes gear-ccw {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+.gear-cw {
+  transform-origin: center;
+  animation: gear-cw 3.6s linear infinite;
+}
+.gear-ccw {
+  transform-origin: center;
+  animation: gear-ccw 2.6s linear infinite;
+}

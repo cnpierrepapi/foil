@@ -1,6 +1,6 @@
 "use client";
 
-import { getEngine, type EngineId } from "./engines";
+import { getEngine, type EngineDef, type EngineId } from "./engines";
 import { runLocalCoach, supportsShaderF16, type LoadProgress } from "./local-engine";
 import type { CoachResponse, Session, Turn } from "./types";
 
@@ -9,6 +9,13 @@ import type { CoachResponse, Session, Turn } from "./types";
 
 function historyFrom(turns: Turn[]) {
   return turns.map((t) => ({ role: t.role, text: t.text }));
+}
+
+// Pick the model build this device can run: f16 when the GPU supports it
+// (smaller, faster), else the universally-compatible f32 build.
+export async function resolveLocalModel(engine: EngineDef): Promise<string> {
+  const f16 = await supportsShaderF16();
+  return f16 ? engine.model! : engine.modelF32 ?? engine.model!;
 }
 
 export async function askCoach(
@@ -21,9 +28,7 @@ export async function askCoach(
   const history = historyFrom(session.turns);
 
   if (engine.kind === "local" && engine.model) {
-    // Pick a build the device can actually run: f16 when supported, else f32.
-    const f16 = await supportsShaderF16();
-    const model = f16 ? engine.model : engine.modelF32 ?? engine.model;
+    const model = await resolveLocalModel(engine);
     try {
       return await runLocalCoach(
         model,

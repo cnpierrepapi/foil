@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Rubric } from "@/components/Rubric";
 import { Spark } from "@/components/Spark";
-import { askCoach } from "@/lib/coach";
+import { Gears } from "@/components/Gears";
+import { askCoach, resolveLocalModel } from "@/lib/coach";
 import { ENGINES, getEngine, webgpuAvailable, type EngineId } from "@/lib/engines";
+import { ensureLocalEngine } from "@/lib/local-engine";
 import {
   clearSession,
   loadEngine,
@@ -38,6 +40,15 @@ export default function ThinkPage() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<LoadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [localState, setLocalState] = useState<
+    "idle" | "loading" | "ready" | "unsupported" | "error"
+  >("idle");
+  const [localProgress, setLocalProgress] = useState(0);
+  const [localText, setLocalText] = useState("");
+  const [localLog, setLocalLog] = useState<string[]>([]);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [fallback, setFallback] = useState(false);
   const [ready, setReady] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -47,13 +58,74 @@ export default function ThinkPage() {
     if (saved) setSession(saved);
     const savedEngine = loadEngine();
     if (savedEngine) setEngineId(savedEngine);
-    else if (!webgpuAvailable()) setEngineId("cloud");
     setReady(true);
   }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [session?.turns.length, busy]);
+
+  // Warm the on-device model the moment the page is ready, so the first
+  // question is instant and we learn up front whether we must fall back.
+  useEffect(() => {
+    if (!ready) return;
+    const eng = getEngine(engineId);
+    if (eng.kind !== "local") {
+      setLocalState("idle");
+      return;
+    }
+    setFallback(false);
+    setLocalError(null);
+    if (!webgpuAvailable()) {
+      setLocalState("unsupported");
+      setLocalLog((l) => [...l, "WebGPU is not available in this browser."]);
+      return;
+    }
+    let cancelled = false;
+    setLocalState("loading");
+    setLocalProgress(0);
+    (async () => {
+      try {
+        const model = await resolveLocalModel(eng);
+        setLocalLog((l) => [...l, `Selected model build: ${model}`]);
+        await ensureLocalEngine(model, (p) => {
+          if (cancelled) return;
+          setLocalProgress(p.progress);
+          setLocalText(p.text);
+          setLocalLog((l) =>
+            l.length && l[l.length - 1] === p.text ? l : [...l, p.text],
+          );
+        });
+        if (!cancelled) {
+          setLocalState("ready");
+          setLocalLog((l) => [...l, "Model ready. Running on your device."]);
+        }
+      } catch (e) {
+        if (cancelled) return;
+        const detail = e instanceof Error ? e.stack || e.message : String(e);
+        setLocalError(detail);
+        setLocalLog((l) => [...l, `ERROR: ${detail}`]);
+        setLocalState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, engineId, loadAttempt]);
+
+  function retryLocal() {
+    setLocalError(null);
+    setLocalState("idle");
+    setLoadAttempt((n) => n + 1);
+  }
+
+  async function copyLog() {
+    try {
+      await navigator.clipboard.writeText(localLog.join("\n"));
+    } catch {
+      /* clipboard blocked; the log is still visible to select manually */
+    }
+  }
 
   function chooseEngine(id: EngineId) {
     setEngineId(id);
@@ -85,7 +157,18 @@ export default function ThinkPage() {
     setSession({ ...base, turns: [...base.turns, { role: "learner", text: latest }] });
     setBusy(true);
     try {
-      const resp = await askCoach(engineId, base, latest, setProgress);
+      let resp;
+      try {
+        resp = await askCoach(engineId, base, latest, setProgress);
+      } catch (primaryErr) {
+        // On-device couldn't run here: fall back to the cloud coach automatically.
+        if (getEngine(engineId).kind === "local") {
+          setFallback(true);
+          resp = await askCoach("cloud", base, latest);
+        } else {
+          throw primaryErr;
+        }
+      }
       setSession((cur) => {
         if (!cur) return cur;
         const next: Session = {
@@ -130,12 +213,31 @@ export default function ThinkPage() {
 
   return (
     <div className="flex min-h-full flex-col bg-paper text-ink">
+      {getEngine(engineId).kind === "local" &&
+        (localState === "loading" || localState === "error") && (
+          <LoadingScreen
+            failed={localState === "error"}
+            progress={localProgress}
+            text={localText}
+            log={localLog}
+            error={localError}
+            onCopy={copyLog}
+            onRetry={retryLocal}
+            onUseCloud={() => chooseEngine("cloud")}
+          />
+        )}
       <header className="flex items-center justify-between border-b border-ink/10 px-5 py-3.5 sm:px-8">
         <Link href="/" className="font-serif text-xl tracking-tight">
           Foil
         </Link>
         <div className="flex items-center gap-3">
-          <EngineBadge engineId={engineId} onChange={chooseEngine} />
+          <EngineBadge
+            engineId={engineId}
+            onChange={chooseEngine}
+            localState={localState}
+            localProgress={localProgress}
+            fallback={fallback}
+          />
           {session && (
             <button
               onClick={reset}
@@ -146,6 +248,15 @@ export default function ThinkPage() {
           )}
         </div>
       </header>
+
+      {getEngine(engineId).kind === "local" &&
+        (localState === "unsupported" || fallback) && (
+          <div className="border-b border-amber-300/60 bg-amber-50 px-5 py-2 text-xs text-amber-800 sm:px-8">
+            {localState === "unsupported"
+              ? "This device can’t run the on-device model (no WebGPU here), so Foil is using the cloud coach instead."
+              : "The on-device model couldn’t load here, so Foil fell back to the cloud coach for this answer."}
+          </div>
+        )}
 
       {!session ? (
         <Setup
@@ -265,9 +376,12 @@ export default function ThinkPage() {
                 </button>
               </div>
               <p className="mt-2 text-[0.7rem] text-ink/40">
-                {engine.kind === "local"
+                {engine.kind === "local" &&
+                !fallback &&
+                localState !== "unsupported" &&
+                localState !== "error"
                   ? "Running on your device. Your questions never leave it."
-                  : "Running on Claude. Your questions are sent to the model and not stored."}
+                  : "Running on the cloud coach. Your questions are sent to the model and not stored."}
               </p>
             </div>
           </section>
@@ -357,25 +471,44 @@ function Setup({
 function EngineBadge({
   engineId,
   onChange,
+  localState,
+  localProgress,
+  fallback,
 }: {
   engineId: EngineId;
   onChange: (id: EngineId) => void;
+  localState: "idle" | "loading" | "ready" | "unsupported" | "error";
+  localProgress: number;
+  fallback: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const engine = getEngine(engineId);
   const hasGpu = webgpuAvailable();
+
+  let label: string;
+  let dot: string;
+  if (engine.kind === "cloud") {
+    label = "Cloud";
+    dot = "bg-amber-500";
+  } else if (fallback || localState === "unsupported" || localState === "error") {
+    label = "Cloud fallback";
+    dot = "bg-amber-500";
+  } else if (localState === "loading") {
+    label = `On-device ${Math.round(localProgress * 100)}%`;
+    dot = "bg-amber-500 animate-pulse";
+  } else {
+    label = "On-device";
+    dot = "bg-emerald-500";
+  }
+
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1.5 rounded-full border border-ink/15 px-3 py-1.5 text-xs font-medium hover:bg-ink/5"
       >
-        <span
-          className={`h-1.5 w-1.5 rounded-full ${
-            engine.kind === "local" ? "bg-emerald-500" : "bg-amber-500"
-          }`}
-        />
-        {engine.kind === "local" ? "On-device" : "Cloud"}
+        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+        {label}
       </button>
       {open && (
         <div className="absolute right-0 z-10 mt-2 w-72 rounded-xl border border-ink/15 bg-paper p-1.5 shadow-lg">
@@ -404,11 +537,100 @@ function EngineBadge({
             );
           })}
           <p className="px-3 py-2 text-[0.7rem] leading-snug text-ink/45">
-            On-device keeps every question private to your machine. Cloud uses Claude
-            when your device can&rsquo;t run a model.
+            On-device keeps every question private to your machine. The cloud coach is
+            only used when your device can&rsquo;t run a model.
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function LoadingScreen({
+  failed,
+  progress,
+  text,
+  log,
+  error,
+  onCopy,
+  onRetry,
+  onUseCloud,
+}: {
+  failed: boolean;
+  progress: number;
+  text: string;
+  log: string[];
+  error: string | null;
+  onCopy: () => void;
+  onRetry: () => void;
+  onUseCloud: () => void;
+}) {
+  const pct = Math.round(progress * 100);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-paper/95 px-5 backdrop-blur-sm">
+      <div className="w-full max-w-lg">
+        <div className="flex flex-col items-center text-center">
+          <Gears failed={failed} />
+          <h2 className="mt-4 font-serif text-2xl">
+            {failed ? "The on-device coach didn’t load" : "Starting your on-device coach"}
+          </h2>
+          <p className="mt-2 max-w-sm text-sm text-ink/60">
+            {failed
+              ? "Copy the log below so we can debug it, or continue with the cloud coach for now."
+              : "A small model is loading into your browser. This happens once. After that it runs fully on your device, private and offline."}
+          </p>
+        </div>
+
+        {!failed && (
+          <div className="mt-6">
+            <div className="h-2 overflow-hidden rounded-full bg-ink/10">
+              <div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-3 text-xs text-ink/55">
+              <span className="truncate font-mono">{text || "Initializing…"}</span>
+              <span className="tabular-nums">{pct}%</span>
+            </div>
+          </div>
+        )}
+
+        {failed && error && (
+          <pre className="mt-5 max-h-44 overflow-auto whitespace-pre-wrap rounded-lg border border-red-300 bg-red-50 p-3 font-mono text-[0.7rem] leading-relaxed text-red-900">
+            {error}
+          </pre>
+        )}
+
+        <details className="mt-4" open={failed}>
+          <summary className="cursor-pointer text-xs text-ink/50">
+            {failed ? "Full log" : "Show log"}
+          </summary>
+          <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap rounded-lg border border-ink/10 bg-card p-3 font-mono text-[0.7rem] leading-relaxed text-ink/70">
+            {log.join("\n") || "…"}
+          </pre>
+        </details>
+
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+          <button
+            onClick={onCopy}
+            className="rounded-full border border-ink/20 px-4 py-2 text-sm font-medium hover:bg-ink/5"
+          >
+            Copy log
+          </button>
+          {failed && (
+            <button
+              onClick={onRetry}
+              className="rounded-full border border-ink/20 px-4 py-2 text-sm font-medium hover:bg-ink/5"
+            >
+              Try again
+            </button>
+          )}
+          <button
+            onClick={onUseCloud}
+            className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-paper"
+          >
+            Use cloud coach
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
