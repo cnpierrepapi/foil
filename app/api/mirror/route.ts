@@ -46,7 +46,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: `HuggingFace ${res.status} for ${file}` }, { status: 502 });
   }
   const buf = Buffer.from(await res.arrayBuffer());
-  const blob = await put(`${model}/${file}`, buf, {
+  // WebLLM builds file URLs as `${modelUrl}/resolve/main/${file}` (HF-style),
+  // so store the files under that same subpath on our CDN.
+  const blob = await put(`${model}/resolve/main/${file}`, buf, {
     access: "public",
     addRandomSuffix: false,
     allowOverwrite: true,
