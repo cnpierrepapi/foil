@@ -18,7 +18,7 @@ What you DO give:
 - Depending on where they are, your question might: open the inquiry wider, push for precision, surface an assumption they are leaning on, ask what evidence would settle it, or invite a counter-example.
 - A warm, brief, intellectually serious tone. Treat the learner as a capable peer, never a child to be managed. No praise inflation, no filler.
 
-Keep your reply to 2 to 4 sentences and end on a question.
+Keep your reply to 2 to 4 sentences and end on a question. Write with plain punctuation. Do not use em dashes; use commas, periods, or colons instead.
 
 ## Your second job: score the thinking
 
@@ -43,7 +43,7 @@ export const COMPACT_SYSTEM_PROMPT = `You are Foil, a Socratic coach. The learne
 
 Rules:
 - NEVER give the answer, the fact, or the reasoning that settles it. If they ask for the answer, warmly refuse and turn it into a sharper question.
-- Reply with ONE probing question (at most two) that pushes their thinking one concrete step further, building on what they just said. 2 to 4 sentences, end on a question. Warm and brief. Treat them as a capable peer.
+- Reply with ONE probing question (at most two) that pushes their thinking one concrete step further, building on what they just said. 2 to 4 sentences, end on a question. Warm and brief. Treat them as a capable peer. No em dashes; use commas or periods.
 - Then score ONLY their latest message from 0 to 5 on: curiosity (deeper vs surface), specificity (precise vs vague), assumptions (examining premises vs taking them for granted), evidence (seeking proof, mechanism, or counter-examples vs asserting).
 
 Reply with ONLY the JSON object below. Start your reply with the character { and end with }. No greeting, no preamble, no text outside the JSON.
@@ -125,6 +125,13 @@ export function buildMessages(
   ];
 }
 
+// Decode any leaked \uXXXX escape sequences. Some models double-escape unicode,
+// so an em dash arrives as the literal six characters "—" instead of the
+// character. This converts them back. Used by both the local and cloud paths.
+export function decodeUnicodeEscapes(s: string): string {
+  return s.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
 // Tolerant parse for the local model's JSON. Clamps scores and fills gaps so a
 // slightly malformed small-model response still renders instead of crashing.
 export function parseCoachJSON(raw: string): import("./types").CoachResponse {
@@ -140,7 +147,7 @@ export function parseCoachJSON(raw: string): import("./types").CoachResponse {
     const obj = JSON.parse(text) as Record<string, unknown>;
     const rawScores = (obj.scores ?? {}) as Record<string, unknown>;
     return {
-      coachReply: String(obj.coachReply ?? "").trim() || "Let's keep going. What part of this feels least settled to you?",
+      coachReply: decodeUnicodeEscapes(String(obj.coachReply ?? "").trim()) || "Let's keep going. What part of this feels least settled to you?",
       refusedToAnswer: Boolean(obj.refusedToAnswer),
       scores: {
         curiosity: clamp(rawScores.curiosity),
@@ -148,13 +155,13 @@ export function parseCoachJSON(raw: string): import("./types").CoachResponse {
         assumptions: clamp(rawScores.assumptions),
         evidence: clamp(rawScores.evidence),
       },
-      observation: String(obj.observation ?? "").trim(),
-      nextNudge: String(obj.nextNudge ?? "").trim(),
+      observation: decodeUnicodeEscapes(String(obj.observation ?? "").trim()),
+      nextNudge: decodeUnicodeEscapes(String(obj.nextNudge ?? "").trim()),
     };
   } catch {
     // The model returned prose, not JSON. Use it as the reply so the session
     // continues instead of erroring out; scores fall back to neutral.
-    const reply = raw.replace(/```json|```/gi, "").trim();
+    const reply = decodeUnicodeEscapes(raw.replace(/```json|```/gi, "").trim());
     return {
       coachReply: reply.slice(0, 800) || "Let's keep going. What part of this feels least settled to you?",
       refusedToAnswer: false,

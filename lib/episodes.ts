@@ -54,3 +54,61 @@ async function syncEpisode(ep: Episode): Promise<void> {
     /* ignore */
   }
 }
+
+// Shape of a row returned by GET /api/episodes (Supabase column names).
+interface EpisodeRow {
+  id: string;
+  device_id: string;
+  source: string;
+  source_type: string;
+  created_at: string;
+  exchanges: number;
+  mastery: number | string;
+  trait_averages: Episode["stats"]["traitAverages"];
+  strongest: string;
+  weakest: string;
+  turns: Episode["turns"] | null;
+}
+
+function rowToEpisode(r: EpisodeRow): Episode {
+  return {
+    id: r.id,
+    deviceId: r.device_id,
+    source: r.source,
+    sourceType: r.source_type as Episode["sourceType"],
+    createdAt: new Date(r.created_at).getTime(),
+    turns: r.turns ?? [],
+    stats: {
+      exchanges: r.exchanges,
+      traitAverages: r.trait_averages,
+      mastery: Number(r.mastery),
+      strongest: r.strongest as Episode["stats"]["strongest"],
+      weakest: r.weakest as Episode["stats"]["weakest"],
+    },
+  };
+}
+
+// Pull this device's episodes back from Supabase (durable restore).
+export async function fetchCloudEpisodes(): Promise<Episode[]> {
+  const id = deviceId();
+  if (!id) return [];
+  try {
+    const res = await fetch(`/api/episodes?device=${encodeURIComponent(id)}`);
+    if (!res.ok) return [];
+    const { episodes } = (await res.json()) as { episodes: EpisodeRow[] };
+    return (episodes ?? []).map(rowToEpisode);
+  } catch {
+    return [];
+  }
+}
+
+export function mergeEpisodes(a: Episode[], b: Episode[]): Episode[] {
+  const map = new Map<string, Episode>();
+  for (const e of [...a, ...b]) map.set(e.id, e);
+  return [...map.values()].sort((x, y) => y.createdAt - x.createdAt);
+}
+
+export function persistEpisodes(eps: Episode[]): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(EPISODES_KEY, JSON.stringify(eps.slice(0, 200)));
+}

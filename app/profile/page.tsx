@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Polygon } from "@/components/Polygon";
-import { listEpisodes } from "@/lib/episodes";
+import {
+  fetchCloudEpisodes,
+  listEpisodes,
+  mergeEpisodes,
+  persistEpisodes,
+} from "@/lib/episodes";
 import { masteryBand } from "@/lib/scoring";
 import { downloadReportPng } from "@/lib/report";
 import { DIMENSION_LABELS, type Episode } from "@/lib/types";
@@ -12,7 +17,17 @@ export default function ProfilePage() {
   const [episodes, setEpisodes] = useState<Episode[] | null>(null);
 
   useEffect(() => {
-    setEpisodes(listEpisodes());
+    const local = listEpisodes();
+    setEpisodes(local);
+    // Restore from Supabase in case localStorage was cleared or is behind.
+    (async () => {
+      const cloud = await fetchCloudEpisodes();
+      if (cloud.length) {
+        const merged = mergeEpisodes(local, cloud);
+        setEpisodes(merged);
+        persistEpisodes(merged);
+      }
+    })();
   }, []);
 
   if (episodes === null) return null;

@@ -12,9 +12,13 @@ import type { CoachResponse } from "./types";
 // Models whose weights we mirror to our own CDN (Vercel Blob) for a fast,
 // reliable download instead of HuggingFace. Maps the WebLLM model id to the
 // base URL of its weight files.
-// (Empty for now: the 1.5B/7B download from HuggingFace. We can mirror the 1.5B
-// to our Blob CDN later the same way we did the 0.5B if download speed matters.)
-const HOSTED_WEIGHTS: Record<string, string> = {};
+// Models whose weights we mirror to our own Blob CDN for a fast, reliable
+// download instead of HuggingFace. The 7B stays on HuggingFace (too large to
+// mirror). f16 builds aren't mirrored, so f16-capable devices use HuggingFace.
+const HOSTED_WEIGHTS: Record<string, string> = {
+  "Qwen2.5-1.5B-Instruct-q4f32_1-MLC":
+    "https://xzy3jzk0o1duizag.public.blob.vercel-storage.com/Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
+};
 
 export interface LoadProgress {
   text: string;

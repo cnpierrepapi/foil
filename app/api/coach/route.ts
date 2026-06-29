@@ -5,6 +5,7 @@ import {
   COACH_SCHEMA,
   SYSTEM_PROMPT,
   buildMessages,
+  decodeUnicodeEscapes,
   type SourceType,
 } from "@/lib/prompt";
 
@@ -69,7 +70,11 @@ export async function POST(req: Request) {
     if (!text || text.type !== "text") {
       throw new Error("No structured output returned.");
     }
-    return NextResponse.json(JSON.parse(text.text));
+    const parsed = JSON.parse(text.text) as Record<string, unknown>;
+    for (const k of ["coachReply", "observation", "nextNudge"] as const) {
+      if (typeof parsed[k] === "string") parsed[k] = decodeUnicodeEscapes(parsed[k] as string);
+    }
+    return NextResponse.json(parsed);
   } catch (err) {
     const message = err instanceof Error ? err.message : "The coach is unavailable.";
     return NextResponse.json({ error: message }, { status: 502 });
