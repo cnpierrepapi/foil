@@ -20,12 +20,20 @@ export default function Home() {
     <div className="bg-paper text-ink">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
         <span className="font-serif text-2xl tracking-tight">Foil</span>
-        <Link
-          href="/think"
-          className="rounded-full border border-ink/20 px-4 py-1.5 text-sm font-medium hover:bg-ink/5"
-        >
-          Start thinking
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/litepaper"
+            className="text-sm font-medium text-ink/55 hover:text-ink"
+          >
+            Litepaper
+          </Link>
+          <Link
+            href="/think"
+            className="rounded-full border border-ink/20 px-4 py-1.5 text-sm font-medium hover:bg-ink/5"
+          >
+            Start thinking
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-6">
@@ -48,6 +56,12 @@ export default function Home() {
               className="rounded-full bg-accent px-7 py-3 font-semibold text-paper"
             >
               Start an inquiry
+            </Link>
+            <Link
+              href="/litepaper"
+              className="rounded-full border border-ink/25 px-7 py-3 font-medium hover:bg-ink/5"
+            >
+              Read the litepaper
             </Link>
             <span className="text-sm text-ink/55">
               Free · open source · no account
