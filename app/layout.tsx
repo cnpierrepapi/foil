@@ -16,7 +16,7 @@ const sans = Inter({
 export const metadata: Metadata = {
   title: "Foil — the AI that won't give you the answer",
   description:
-    "A Socratic thinking coach. It refuses to hand over answers and instead sharpens the questions you ask, the one skill that stays human as AI gets better at everything. Runs on your device.",
+    "A Socratic thinking coach. It refuses to hand over answers and instead sharpens the questions you ask, the one skill that stays human as AI gets better at everything. Free, open source, no account.",
 };
 
 export default function RootLayout({

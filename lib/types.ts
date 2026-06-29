@@ -32,7 +32,6 @@ export type Turn =
       text: string; // the Socratic reply (never the answer)
       scores: Scores; // assessment of the learner turn it responds to
       observation: string;
-      nextNudge: string;
     };
 
 export interface Session {
@@ -48,7 +47,6 @@ export interface CoachResponse {
   refusedToAnswer: boolean;
   scores: Scores;
   observation: string;
-  nextNudge: string;
 }
 
 // An episode is a fixed run of EPISODE_LENGTH exchanges. When it completes we

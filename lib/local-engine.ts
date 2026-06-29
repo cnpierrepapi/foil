@@ -126,6 +126,11 @@ export async function runLocalCoach(
     temperature: 0.6,
     max_tokens: 400,
     stream: true,
+    // Stop the model the moment it tries to continue past its own turn. Small
+    // models often keep generating and role-play the learner's next message
+    // (a chat-template leak); these stops cut it off at the turn boundary so
+    // the output stays a single JSON object.
+    stop: ["<|im_end|>", "\nuser", "\nUser", "\nassistant", "\nLearner"],
   })) as AsyncIterable<ChatChunk>;
 
   let content = "";

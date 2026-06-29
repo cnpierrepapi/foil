@@ -58,7 +58,20 @@ export async function askCoach(
       latest,
     }),
   });
-  const data = await res.json();
+  // Read the body as text first. A platform-level failure (function timeout,
+  // crash, 413) returns a non-JSON error page, and calling res.json() on that
+  // throws "Unexpected token ... is not valid JSON" before we can read the
+  // status. Parse defensively and surface the real server message instead.
+  const raw = await res.text();
+  let data: CoachResponse & { error?: string };
+  try {
+    data = raw ? JSON.parse(raw) : ({} as typeof data);
+  } catch {
+    const snippet = raw.replace(/\s+/g, " ").trim().slice(0, 160);
+    throw new Error(
+      `The coach is unavailable (HTTP ${res.status})${snippet ? `: ${snippet}` : "."}`,
+    );
+  }
   if (!res.ok) throw new Error(data?.error ?? "The coach is unavailable.");
   return data as CoachResponse;
 }

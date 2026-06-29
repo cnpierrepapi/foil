@@ -19,17 +19,17 @@ Foil is a small, simple tool for practicing it.
 3. **The coach is bounded.** It is constrained never to give the answer, the fact, or the chain of reasoning that settles it. It asks one sharper question back.
 4. **Your thinking is scored.** Each move is read across four dimensions — curiosity, specificity, the assumptions it surfaces, and the evidence it reaches for — so an invisible skill becomes visible and you can watch it improve over a session.
 
-## Local-first, private by design
+## Claude by default, private on-device option
 
-The coach runs **on your device**. A small open-weight model (Qwen2.5, Apache-2.0) runs directly in your browser via [WebLLM](https://github.com/mlc-ai/web-llm) over WebGPU. Your questions never leave your machine, it works offline after the first load, there is no account, and there is no per-question cost.
+By default the coach runs on **Claude** (Claude Sonnet 4.6, via the Anthropic API). The server is a stateless proxy — it stores no transcripts and keeps no accounts.
 
-When a device can't run a local model (no WebGPU), Foil falls back to a cloud model (Claude, via the Anthropic API). The server is a stateless proxy — it stores no transcripts and keeps no accounts.
+For total privacy, you can switch to an **on-device** model in one click. A small open-weight model (Qwen2.5, Apache-2.0) runs directly in your browser via [WebLLM](https://github.com/mlc-ai/web-llm) over WebGPU: your questions never leave your machine, it works offline after the first load, and there is no per-question cost. If a device can't run the local model (no WebGPU), Foil falls back to Claude.
 
 | Tier | Model | Notes |
 | --- | --- | --- |
-| On-device (default) | Qwen2.5-1.5B-Instruct | ~1.1 GB one-time download, fully private |
+| Cloud (default) | Claude Sonnet 4.6 | Stateless proxy, stores nothing |
+| On-device (opt-in) | Qwen2.5-1.5B-Instruct | ~1.1 GB one-time download, fully private |
 | On-device (capable machines) | Qwen2.5-7B-Instruct | Sharper coaching, still on-device |
-| Cloud fallback | Claude | Used when WebGPU is unavailable |
 
 ## Run it
 
@@ -40,7 +40,7 @@ npm run dev
 
 Open http://localhost:3000.
 
-The on-device tier needs no configuration. To enable the cloud fallback, set an Anthropic API key:
+The default cloud coach needs an Anthropic API key. The opt-in on-device tier needs no configuration.
 
 ```bash
 cp .env.example .env.local
@@ -50,14 +50,14 @@ cp .env.example .env.local
 ## Design principles
 
 - **Design for impact** — train the one capability that compounds across everything.
-- **Privacy by design** — inference runs on-device; the cloud path stores nothing.
+- **Privacy by design** — opt into on-device inference for full privacy; the default cloud path stores nothing.
 - **Responsible AI** — the model is bounded so it cannot give the answer; that constraint is the product.
 - **Product quality** — one screen, beautiful and calm, usable in ten seconds.
 - **Keep it simple** — no account, no setup, no dark patterns, no engagement loops.
 
 ## Stack
 
-Next.js (App Router) · React · Tailwind CSS · WebLLM (in-browser inference) · Anthropic SDK (cloud fallback).
+Next.js (App Router) · React · Tailwind CSS · Anthropic SDK (Claude Sonnet 4.6, default) · WebLLM (in-browser inference, opt-in).
 
 ## License
 

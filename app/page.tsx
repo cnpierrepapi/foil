@@ -10,8 +10,8 @@ const PRINCIPLES = [
     body: "Each question you ask is read for curiosity, specificity, the assumptions it surfaces, and the evidence it reaches for. An invisible skill, made visible so you can feel it sharpen.",
   },
   {
-    title: "It runs on your device",
-    body: "A small open model runs in your browser. Your questions never leave your machine, and it works offline. No account, no tracking, no cost per question.",
+    title: "Private when you want it",
+    body: "By default Foil thinks with Claude, through a server that stores nothing. Want total privacy? Switch on a small in-browser model in one click and your questions never leave your machine. No account either way.",
   },
 ];
 
@@ -50,7 +50,7 @@ export default function Home() {
               Start an inquiry
             </Link>
             <span className="text-sm text-ink/55">
-              Free · open source · runs on your device
+              Free · open source · no account
             </span>
           </div>
         </section>

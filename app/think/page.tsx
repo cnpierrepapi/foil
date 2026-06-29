@@ -206,7 +206,6 @@ export default function ThinkPage() {
             text: resp.coachReply,
             scores: resp.scores,
             observation: resp.observation,
-            nextNudge: resp.nextNudge,
           },
         ],
       };
@@ -373,15 +372,9 @@ export default function ThinkPage() {
                 ) : (
                   <div key={i} className="max-w-[92%] space-y-3">
                     <p className="font-serif text-lg leading-relaxed">{t.text}</p>
-                    {(t.observation || t.nextNudge) && (
+                    {t.observation && (
                       <div className="space-y-1.5 border-l-2 border-accent/40 pl-3.5 text-sm">
-                        {t.observation && <p className="italic text-ink/60">{t.observation}</p>}
-                        {t.nextNudge && (
-                          <p className="text-ink/70">
-                            <span className="font-medium text-ink/50">Try asking: </span>
-                            {t.nextNudge}
-                          </p>
-                        )}
+                        <p className="italic text-ink/60">{t.observation}</p>
                       </div>
                     )}
                     <div className="rounded-xl border border-ink/10 bg-card px-4 py-3">
@@ -617,8 +610,8 @@ function EngineBadge({
             );
           })}
           <p className="px-3 py-2 text-[0.7rem] leading-snug text-ink/45">
-            On-device keeps every question private to your machine. The cloud coach is
-            only used when your device can&rsquo;t run a model.
+            Claude is the default. Switch to an on-device model any time to keep every
+            question private to your machine; if it can&rsquo;t run, Foil falls back to Claude.
           </p>
         </div>
       )}

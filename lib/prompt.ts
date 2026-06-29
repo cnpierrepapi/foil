@@ -3,7 +3,19 @@
 // scoring the quality of their thinking. "Responsible AI" as a hard constraint,
 // not a disclaimer.
 
-export const COACH_MODEL = "claude-opus-4-8";
+export const COACH_MODEL = "claude-sonnet-4-6";
+
+// Shown to the learner when the model declines a request on safety grounds.
+// Structured output is not guaranteed on stop_reason "refusal", so the cloud
+// route returns this fixed, schema-shaped object instead of risking malformed
+// text reaching the screen.
+export const REFUSAL_RESPONSE = {
+  coachReply:
+    "I can't take that one on. Bring me something you genuinely want to reason through, and I will help you take it apart.",
+  refusedToAnswer: true,
+  scores: { curiosity: 0, specificity: 0, assumptions: 0, evidence: 0 },
+  observation: "",
+} as const;
 
 export const SYSTEM_PROMPT = `You are Foil: a Socratic thinking coach. Your job is the opposite of a chatbot's. A chatbot hands over answers. You build the one capability that stays scarce and human as AI gets better at everything: knowing what to ask, and how to weigh what comes back.
 
@@ -31,8 +43,9 @@ After reading the learner's latest message, score it 0 to 5 on each of four dime
 
 Also give:
 - observation: one honest sentence naming the single most useful thing about this move (something they did well, or the one habit to push on). No hedging.
-- nextNudge: one concrete example of a sharper question they could ask next. This models good inquiry without resolving the topic.
 - refusedToAnswer: set true only if the learner asked you for the answer / to do the thinking and you redirected; otherwise false.
+
+Do not hand the learner a ready-made next question to ask. The work of finding the sharper question is theirs; that struggle is the point. Your probing question above is the only question you give.
 
 Score only the learner's most recent message. The source and earlier turns are context for judging it.`;
 
@@ -47,7 +60,7 @@ Rules:
 - Then score ONLY their latest message from 0 to 5 on: curiosity (deeper vs surface), specificity (precise vs vague), assumptions (examining premises vs taking them for granted), evidence (seeking proof, mechanism, or counter-examples vs asserting).
 
 Reply with ONLY the JSON object below. Start your reply with the character { and end with }. No greeting, no preamble, no text outside the JSON.
-{"coachReply":"a 2-4 sentence Socratic reply ending in a question","refusedToAnswer":false,"scores":{"curiosity":0,"specificity":0,"assumptions":0,"evidence":0},"observation":"one honest sentence about their move","nextNudge":"one sharper question they could ask next"}`;
+{"coachReply":"a 2-4 sentence Socratic reply ending in a question","refusedToAnswer":false,"scores":{"curiosity":0,"specificity":0,"assumptions":0,"evidence":0},"observation":"one honest sentence about their move"}`;
 
 export const COACH_SCHEMA = {
   type: "object",
@@ -72,9 +85,8 @@ export const COACH_SCHEMA = {
       additionalProperties: false,
     },
     observation: { type: "string", description: "One honest sentence about this move." },
-    nextNudge: { type: "string", description: "One sharper question they could ask next." },
   },
-  required: ["coachReply", "refusedToAnswer", "scores", "observation", "nextNudge"],
+  required: ["coachReply", "refusedToAnswer", "scores", "observation"],
   additionalProperties: false,
 } as const;
 
@@ -87,8 +99,7 @@ export const JSON_INSTRUCTION = `Respond with ONLY a single JSON object, no mark
   "coachReply": string (2-4 sentences ending on a question, never the answer),
   "refusedToAnswer": boolean,
   "scores": { "curiosity": 0-5, "specificity": 0-5, "assumptions": 0-5, "evidence": 0-5 },
-  "observation": string,
-  "nextNudge": string
+  "observation": string
 }`;
 
 export function buildSourceBlock(source: string, sourceType: SourceType): string {
@@ -132,8 +143,13 @@ export function decodeUnicodeEscapes(s: string): string {
   return s.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
 }
 
-// Tolerant parse for the local model's JSON. Clamps scores and fills gaps so a
-// slightly malformed small-model response still renders instead of crashing.
+// Parse the on-device model's JSON. The cloud path does NOT use this — there,
+// output_config.format guarantees valid JSON. This is only for the opt-in local
+// model, which has no schema enforcement. We extract a JSON object tolerantly
+// (small models like to wrap it in prose or fences) and clamp the scores, but if
+// the result is not valid JSON we THROW rather than salvage. A throw lets the
+// caller fall back to the cloud coach; salvaging would surface the model's raw
+// output — including leaked chat-template turns — straight to the learner.
 export function parseCoachJSON(raw: string): import("./types").CoachResponse {
   let text = raw.trim();
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -143,31 +159,20 @@ export function parseCoachJSON(raw: string): import("./types").CoachResponse {
   if (start !== -1 && end !== -1) text = text.slice(start, end + 1);
 
   const clamp = (v: unknown) => Math.max(0, Math.min(5, Math.round(Number(v) || 0)));
-  try {
-    const obj = JSON.parse(text) as Record<string, unknown>;
-    const rawScores = (obj.scores ?? {}) as Record<string, unknown>;
-    return {
-      coachReply: decodeUnicodeEscapes(String(obj.coachReply ?? "").trim()) || "Let's keep going. What part of this feels least settled to you?",
-      refusedToAnswer: Boolean(obj.refusedToAnswer),
-      scores: {
-        curiosity: clamp(rawScores.curiosity),
-        specificity: clamp(rawScores.specificity),
-        assumptions: clamp(rawScores.assumptions),
-        evidence: clamp(rawScores.evidence),
-      },
-      observation: decodeUnicodeEscapes(String(obj.observation ?? "").trim()),
-      nextNudge: decodeUnicodeEscapes(String(obj.nextNudge ?? "").trim()),
-    };
-  } catch {
-    // The model returned prose, not JSON. Use it as the reply so the session
-    // continues instead of erroring out; scores fall back to neutral.
-    const reply = decodeUnicodeEscapes(raw.replace(/```json|```/gi, "").trim());
-    return {
-      coachReply: reply.slice(0, 800) || "Let's keep going. What part of this feels least settled to you?",
-      refusedToAnswer: false,
-      scores: { curiosity: 0, specificity: 0, assumptions: 0, evidence: 0 },
-      observation: "",
-      nextNudge: "",
-    };
-  }
+  // No try/catch: a parse error propagates so the caller can fall back to cloud.
+  const obj = JSON.parse(text) as Record<string, unknown>;
+  const reply = decodeUnicodeEscapes(String(obj.coachReply ?? "").trim());
+  if (!reply) throw new Error("Local model returned no coachReply.");
+  const rawScores = (obj.scores ?? {}) as Record<string, unknown>;
+  return {
+    coachReply: reply,
+    refusedToAnswer: Boolean(obj.refusedToAnswer),
+    scores: {
+      curiosity: clamp(rawScores.curiosity),
+      specificity: clamp(rawScores.specificity),
+      assumptions: clamp(rawScores.assumptions),
+      evidence: clamp(rawScores.evidence),
+    },
+    observation: decodeUnicodeEscapes(String(obj.observation ?? "").trim()),
+  };
 }
