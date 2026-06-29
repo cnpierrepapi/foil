@@ -50,3 +50,23 @@ export interface CoachResponse {
   observation: string;
   nextNudge: string;
 }
+
+// An episode is a fixed run of EPISODE_LENGTH exchanges. When it completes we
+// compute these stats, show the skill cards, and save the episode.
+export interface EpisodeStats {
+  exchanges: number;
+  traitAverages: Scores; // 0..5 per trait, averaged over the episode
+  mastery: number; // 1.00..4.99 headline score
+  strongest: Dimension;
+  weakest: Dimension;
+}
+
+export interface Episode {
+  id: string;
+  deviceId: string;
+  source: string;
+  sourceType: SourceType;
+  createdAt: number;
+  turns: Turn[];
+  stats: EpisodeStats;
+}

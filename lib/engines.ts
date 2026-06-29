@@ -1,7 +1,8 @@
-// The engines a learner can run the coach on. Local-first: the model runs in
-// the browser over WebGPU and nothing leaves the device. Claude is the fallback.
+// The engines a learner can run the coach on. Claude (cloud) is the default for
+// quality. On-device Qwen models are an opt-in, fully private alternative that
+// runs in the browser over WebGPU.
 
-export type EngineId = "local-0_5b" | "local-1b" | "local-1_5b" | "cloud";
+export type EngineId = "cloud" | "local-1_5b" | "local-7b";
 
 export interface EngineDef {
   id: EngineId;
@@ -17,43 +18,38 @@ export interface EngineDef {
 
 export const ENGINES: EngineDef[] = [
   {
-    id: "local-0_5b",
-    kind: "local",
-    label: "On-device · Qwen2.5 0.5B",
-    model: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-    modelF32: "Qwen2.5-0.5B-Instruct-q4f32_1-MLC",
-    size: "~0.5 GB, one-time",
-    blurb: "Smallest and quickest to download. Runs fully in your browser, private.",
-  },
-  {
-    id: "local-1b",
-    kind: "local",
-    label: "On-device · Llama 3.2 1B",
-    model: "Llama-3.2-1B-Instruct-q4f16_1-MLC",
-    modelF32: "Llama-3.2-1B-Instruct-q4f32_1-MLC",
-    size: "~0.9 GB, one-time",
-    blurb: "Smallest and fastest. Runs fully in your browser, private and offline.",
-  },
-  {
-    id: "local-1_5b",
-    kind: "local",
-    label: "On-device · Qwen2.5 1.5B (sharper)",
-    model: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
-    modelF32: "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
-    size: "~1.1 GB, one-time",
-    blurb: "A bit sharper than the 1B model. Still fully on your device.",
-  },
-  {
     id: "cloud",
     kind: "cloud",
     label: "Cloud · Claude",
     size: "no download",
-    blurb: "Best quality, used when your device can't run a local model.",
+    blurb: "Best quality and the default. Questions are sent to the model and not stored.",
+  },
+  {
+    id: "local-1_5b",
+    kind: "local",
+    label: "On-device · Qwen2.5 1.5B",
+    model: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+    modelF32: "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
+    size: "~1.1 GB, one-time",
+    blurb: "Private and offline. A one-time download, then runs fully on your device.",
+  },
+  {
+    id: "local-7b",
+    kind: "local",
+    label: "On-device · Qwen2.5 7B",
+    model: "Qwen2.5-7B-Instruct-q4f16_1-MLC",
+    modelF32: "Qwen2.5-7B-Instruct-q4f32_1-MLC",
+    size: "~4.7 GB, one-time",
+    blurb: "Sharpest on-device option, for capable, well-connected machines.",
   },
 ];
 
 export function getEngine(id: EngineId): EngineDef {
   return ENGINES.find((e) => e.id === id) ?? ENGINES[0];
+}
+
+export function isEngineId(v: string | null): v is EngineId {
+  return !!v && ENGINES.some((e) => e.id === v);
 }
 
 export function webgpuAvailable(): boolean {

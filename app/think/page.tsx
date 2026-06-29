@@ -5,8 +5,9 @@ import Link from "next/link";
 import { Rubric } from "@/components/Rubric";
 import { Spark } from "@/components/Spark";
 import { Gears } from "@/components/Gears";
+import { SkillCards } from "@/components/SkillCards";
 import { askCoach, resolveLocalModel } from "@/lib/coach";
-import { ENGINES, getEngine, webgpuAvailable, type EngineId } from "@/lib/engines";
+import { ENGINES, getEngine, isEngineId, webgpuAvailable, type EngineId } from "@/lib/engines";
 import { ensureLocalEngine } from "@/lib/local-engine";
 import {
   clearSession,
@@ -16,8 +17,10 @@ import {
   saveEngine,
   saveSession,
 } from "@/lib/store";
+import { EPISODE_LENGTH, episodeStats, exchangeCount } from "@/lib/scoring";
+import { deviceId, previousMastery, saveEpisode } from "@/lib/episodes";
 import { STARTERS } from "@/lib/starters";
-import { DIMENSIONS, type Scores, type Session, type SourceType } from "@/lib/types";
+import { DIMENSIONS, type Episode, type Scores, type Session, type SourceType } from "@/lib/types";
 import type { LoadProgress } from "@/lib/local-engine";
 
 const SOURCE_TYPES: { id: SourceType; label: string }[] = [
@@ -33,7 +36,9 @@ function total(scores: Scores) {
 
 export default function ThinkPage() {
   const [session, setSession] = useState<Session | null>(null);
-  const [engineId, setEngineId] = useState<EngineId>("local-0_5b");
+  const [engineId, setEngineId] = useState<EngineId>("cloud");
+  const [completed, setCompleted] = useState<Episode | null>(null);
+  const [prevMastery, setPrevMastery] = useState<number | null>(null);
   const [draftType, setDraftType] = useState<SourceType>("claim");
   const [draftSource, setDraftSource] = useState("");
   const [input, setInput] = useState("");
@@ -60,7 +65,7 @@ export default function ThinkPage() {
     const saved = loadSession();
     if (saved) setSession(saved);
     const savedEngine = loadEngine();
-    if (savedEngine) setEngineId(savedEngine);
+    if (isEngineId(savedEngine)) setEngineId(savedEngine);
     setReady(true);
   }, []);
 
@@ -152,6 +157,7 @@ export default function ThinkPage() {
     setSession(s);
     saveSession(s);
     setError(null);
+    setCompleted(null);
   }
 
   function reset() {
@@ -160,6 +166,7 @@ export default function ThinkPage() {
     setDraftSource("");
     setInput("");
     setError(null);
+    setCompleted(null);
   }
 
   async function send() {
@@ -189,24 +196,39 @@ export default function ThinkPage() {
           throw primaryErr;
         }
       }
-      setSession((cur) => {
-        if (!cur) return cur;
-        const next: Session = {
-          ...cur,
-          turns: [
-            ...cur.turns,
-            {
-              role: "coach",
-              text: resp.coachReply,
-              scores: resp.scores,
-              observation: resp.observation,
-              nextNudge: resp.nextNudge,
-            },
-          ],
+      const next: Session = {
+        ...base,
+        turns: [
+          ...base.turns,
+          { role: "learner", text: latest },
+          {
+            role: "coach",
+            text: resp.coachReply,
+            scores: resp.scores,
+            observation: resp.observation,
+            nextNudge: resp.nextNudge,
+          },
+        ],
+      };
+      setSession(next);
+      saveSession(next);
+      // An episode ends after EPISODE_LENGTH exchanges: save it and show the
+      // skill cards. `===` so it fires exactly once.
+      if (exchangeCount(next.turns) === EPISODE_LENGTH) {
+        const prev = previousMastery();
+        const episode: Episode = {
+          id: crypto.randomUUID(),
+          deviceId: deviceId(),
+          source: next.source,
+          sourceType: next.sourceType,
+          createdAt: Date.now(),
+          turns: next.turns,
+          stats: episodeStats(next.turns),
         };
-        saveSession(next);
-        return next;
-      });
+        saveEpisode(episode);
+        setPrevMastery(prev);
+        setCompleted(episode);
+      }
     } catch (e) {
       // Roll back the optimistic turn so the learner can retry cleanly.
       setSession(base);
@@ -246,11 +268,17 @@ export default function ThinkPage() {
             onUseCloud={() => chooseEngine("cloud")}
           />
         )}
+      {completed && (
+        <SkillCards episode={completed} prevMastery={prevMastery} onNewInquiry={reset} />
+      )}
       <header className="flex items-center justify-between border-b border-ink/10 px-5 py-3.5 sm:px-8">
         <Link href="/" className="font-serif text-xl tracking-tight">
           Foil
         </Link>
         <div className="flex items-center gap-3">
+          <Link href="/profile" className="text-xs font-medium text-ink/55 hover:text-ink">
+            Profile
+          </Link>
           <EngineBadge
             engineId={engineId}
             onChange={chooseEngine}
@@ -322,7 +350,7 @@ export default function ThinkPage() {
           <section className="flex min-h-0 flex-col">
             <div className="flex items-center justify-between border-b border-ink/10 px-5 py-2.5 sm:px-8">
               <span className="text-[0.7rem] font-semibold uppercase tracking-widest text-ink/40">
-                Your inquiry
+                Exchange {exchangeCount(session.turns)} / {EPISODE_LENGTH}
               </span>
               <Spark totals={totals} />
             </div>
