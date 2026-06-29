@@ -5,9 +5,10 @@ import type { Episode } from "@/lib/types";
 export const runtime = "nodejs";
 
 // Anonymous, device-based persistence. Episodes are keyed by a random device id
-// (no account, no email). RLS is on with no public policies, so only this
-// server (service role) can read or write. localStorage remains the client's
-// source of truth; this is durable backup + cross-session restore.
+// (no account, no email). The table has RLS on with no policies; all access goes
+// through SECURITY DEFINER functions, so the publishable key can only insert, or
+// read rows for one device id. localStorage stays the client's source of truth;
+// this is durable backup + cross-session restore.
 
 export async function POST(req: Request) {
   const db = supabaseServer();
@@ -23,18 +24,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "missing id or deviceId" }, { status: 400 });
   }
 
-  const { error } = await db.from("episodes").upsert({
-    id: ep.id,
-    device_id: ep.deviceId,
-    source: ep.source,
-    source_type: ep.sourceType,
-    created_at: new Date(ep.createdAt).toISOString(),
-    exchanges: ep.stats.exchanges,
-    mastery: ep.stats.mastery,
-    trait_averages: ep.stats.traitAverages,
-    strongest: ep.stats.strongest,
-    weakest: ep.stats.weakest,
-    turns: ep.turns,
+  const { error } = await db.rpc("save_episode", {
+    p_id: ep.id,
+    p_device_id: ep.deviceId,
+    p_source: ep.source,
+    p_source_type: ep.sourceType,
+    p_created_at: new Date(ep.createdAt).toISOString(),
+    p_exchanges: ep.stats.exchanges,
+    p_mastery: ep.stats.mastery,
+    p_trait_averages: ep.stats.traitAverages,
+    p_strongest: ep.stats.strongest,
+    p_weakest: ep.stats.weakest,
+    p_turns: ep.turns,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
@@ -47,12 +48,9 @@ export async function GET(req: Request) {
   const device = new URL(req.url).searchParams.get("device");
   if (!device) return NextResponse.json({ error: "missing device" }, { status: 400 });
 
-  const { data, error } = await db
-    .from("episodes")
-    .select("*")
-    .eq("device_id", device)
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const { data, error } = await db.rpc("list_episodes_for_device", {
+    p_device_id: device,
+  });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ episodes: data ?? [] });
 }
